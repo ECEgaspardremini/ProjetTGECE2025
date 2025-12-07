@@ -1,0 +1,55 @@
+NODES 12
+A
+B
+C
+D
+E
+F
+G
+H
+I
+J
+K
+T
+
+DEPOT T
+
+EDGES 19
+T K 370
+T A 375
+T J 290
+J E 170
+J B 170
+K A 115
+A B 175
+A C 150
+B D 150
+B C 125
+E D 160
+D F 170
+D C 215
+C H 300
+H F 190
+H I 160
+I G 170
+H F 200
+G F 105
+
+# Encombrants 
+# Format : ENCOMBRANT u v position
+# u et v définissent la rue, position = distance depuis u sur cette rue
+
+# 1) Rue A-B, encombrant à 80m depuis A 
+ENCOMBRANT A B 80
+
+# 2) Rue C-H, encombrant à 120m depuis C
+ENCOMBRANT C H 120
+
+# 3) Rue T-A, encombrant à 200m depuis T
+ENCOMBRANT T A 200
+
+# 4) Rue D-F, encombrant placé à 90m depuis D
+ENCOMBRANT D F 90
+
+# 5) Rue H-I, encombrant placé à 50m depuis H
+ENCOMBRANT H I 50
