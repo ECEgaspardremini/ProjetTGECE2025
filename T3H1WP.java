@@ -6,10 +6,10 @@ import java.util.*;
 
 public class T3H1WP {
 
-    
+
      // Applique l'algorithme de Welsh & Powell sur le graphe donné
      // return une map Secteur: numéro de jour (1, 2, 3,etc)
-     
+
     public Map<Secteur, Integer> colorierWelshPowell(GrapheSecteurs g) {
 
         // résultat : pour chaque secteur on stock sa couleur( jour)
@@ -35,7 +35,7 @@ public class T3H1WP {
             couleur.put(s, currentColor);
 
             // Puis on essaie de colorier le plus de secteurs possible
-            // avec cette même couleur 
+            // avec cette même couleur
             for (Secteur t : secteurs) {
 
                 // On ignore les secteurs déjà coloriés
@@ -56,8 +56,8 @@ public class T3H1WP {
         return couleur;
     }
 
-    // *boolean qui renvoie true si le secteur t peut recevoir la couleur currentColor pour cela aucun voisin ne doit avoir la bonne couleur
-    
+    // boolean qui renvoie true si le secteur t peut recevoir la couleur currentColor pour cela aucun voisin ne doit avoir la bonne couleur
+
     private boolean estCompatibleAvecCouleur(GrapheSecteurs g,
                                              Secteur t,
                                              Map<Secteur, Integer> couleur,
