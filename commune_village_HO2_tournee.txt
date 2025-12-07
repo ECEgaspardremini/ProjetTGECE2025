@@ -1,0 +1,68 @@
+NODES 12
+A
+B
+C
+D
+E
+F
+G
+H
+I
+J
+K
+T
+
+DEPOT T
+
+ARCS 28
+T J 290
+J T 290
+
+J E 170
+E J 170
+
+E D 160
+D E 160
+
+B D 150
+D B 150
+
+B J 170
+
+B A 175
+A B 175
+
+A T 375
+K T 375
+
+A K 115
+
+C A 150
+C B 125
+C D 215
+
+D F 170
+F D 170
+
+F G 105
+G F 105
+
+H F 190
+
+C H 300
+H C 300
+
+H I 160
+I H 160
+
+G I 170
+I G 170
+
+# Encombrants sur des arcs orientés :
+# ENCOMBRANT U V position (mètres depuis U)
+ENCOMBRANT A B 80
+ENCOMBRANT C H 120
+ENCOMBRANT A T 200
+ENCOMBRANT D F 90
+ENCOMBRANT H I 50
+ENCOMBRANT A K 50
