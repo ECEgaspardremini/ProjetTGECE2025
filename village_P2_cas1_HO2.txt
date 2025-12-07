@@ -1,0 +1,33 @@
+NODES 10
+A
+B
+C
+D
+E
+F
+G
+H
+I
+T
+
+DEPOT T
+
+ARCS 18
+T A 170
+A B 30
+T B 210
+B C 75
+D C 5
+C F 35
+F D 105
+B I 15
+C I 85
+I F 60
+I T 20
+G F 80
+F G 80
+G T 200
+T H 190
+H G 5
+E T 25
+F E 35
