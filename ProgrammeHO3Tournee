@@ -1,0 +1,390 @@
+import java.util.*;
+
+public class ProgrammeHO3Tournee {
+
+    // Encodage d'un arc orienté (u, v) dans un long pour le mettre dans un Set.
+    private static long encodageArc(int u, int v) {
+        return (((long) u) << 32) | (v & 0xffffffffL);
+    }
+
+    // Reconstruit le chemin source -> cible grâce aux prédécesseurs de Dijkstra.
+    private static List<Integer> reconstruireChemin(int[] predecesseur, int idSource, int idCible) {
+        List<Integer> chemin = new ArrayList<>();
+        int courant = idCible;
+        while (courant != -1) {
+            chemin.add(courant);
+            if (courant == idSource) break;
+            courant = predecesseur[courant];
+        }
+        Collections.reverse(chemin);
+        return chemin;
+    }
+
+    // Petite classe pour stocker les infos utiles d'un encombrant pendant la tournée.
+    private static class EncombrantAvecInfos {
+        EncombrantPourTourneeHO3 encombrant;
+        int idU;
+        int idV;
+        int idRattachement;  // sommet utilisé comme "client" dans le TSP
+        boolean estDoubleSensUneSeuleVoie;
+
+        EncombrantAvecInfos(EncombrantPourTourneeHO3 e,
+                            int idU,
+                            int idV,
+                            int idRattachement,
+                            boolean estDoubleSensUneSeuleVoie) {
+            this.encombrant = e;
+            this.idU = idU;
+            this.idV = idV;
+            this.idRattachement = idRattachement;
+            this.estDoubleSensUneSeuleVoie = estDoubleSensUneSeuleVoie;
+        }
+    }
+
+    public static void executerTourneeHO3(String nomFichier) {
+
+        try {
+            // 1) Lecture de l'instance
+            InstanceTourneeHO3 instance = LecteurDeFichierTourneeHO3.lireInstanceTourneeHO3(nomFichier);
+            GrapheRoutier graphe = instance.getGraphe();
+            int idDepot = instance.getIdDepot();
+            List<EncombrantPourTourneeHO3> liste = instance.getListeEncombrants();
+            int k = liste.size();
+
+            System.out.println("===== HO3 - Tournée de ramassage (Hypothèse 2) =====");
+            System.out.println("Nombre d'encombrants à ramasser : " + k);
+            System.out.println("Dépôt : " + graphe.getNomSommet(idDepot));
+
+            // 2) Préparer la structure des encombrants avec idU, idV, rattachement
+            List<EncombrantAvecInfos> encombrants = new ArrayList<>();
+
+            for (EncombrantPourTourneeHO3 e : liste) {
+                Integer idU = graphe.getIdSommet(e.getNomU());
+                Integer idV = graphe.getIdSommet(e.getNomV());
+                if (idU == null || idV == null) {
+                    throw new IllegalArgumentException("Sommet inconnu pour un encombrant HO3 : "
+                            + e.getNomU() + " ou " + e.getNomV());
+                }
+
+                boolean estDoubleSens = e.isDoubleSensUneSeuleVoie();
+
+                int idRattachement;
+                if (estDoubleSens) {
+                    // Rue double sens une seule voie : on choisit l'extrémité la plus proche
+                    double longueur = graphe.getLongueurArete(idU, idV);
+                    double dDepuisU = e.getPositionDepuisU();
+                    double dDepuisV = longueur - dDepuisU;
+                    idRattachement = (dDepuisU <= dDepuisV) ? idU : idV;
+                } else {
+                    // Arc orienté : on se raccroche au sommet de départ U
+                    idRattachement = idU;
+                }
+
+                encombrants.add(
+                        new EncombrantAvecInfos(e, idU, idV, idRattachement, estDoubleSens)
+                );
+            }
+
+            System.out.print("Encombrants : ");
+            for (EncombrantAvecInfos ei : encombrants) {
+                System.out.print(ei.encombrant.getNomU()
+                        + (ei.estDoubleSensUneSeuleVoie ? "<->" : "->")
+                        + ei.encombrant.getNomV() + "  ");
+            }
+            System.out.println("\n");
+
+            // 3) Préparer les "sources importantes" pour Dijkstra
+            Set<Integer> sources = new HashSet<>();
+            sources.add(idDepot);
+            for (EncombrantAvecInfos ei : encombrants) {
+                sources.add(ei.idRattachement);
+                sources.add(ei.idU);
+                sources.add(ei.idV);
+            }
+
+            Map<Integer, ResultatDuDijkstra> dijkstraDepuis = new HashMap<>();
+            for (int s : sources) {
+                dijkstraDepuis.put(s, Dijkstra.calculerPlusCourtsChemins(graphe, s));
+            }
+
+            // 4) Préparer les "points" du TSP : dépôt + carrefours rattachés
+            int nbPoints = k + 1;
+            int[] points = new int[nbPoints];
+            points[0] = idDepot;
+            for (int i = 0; i < k; i++) {
+                points[i + 1] = encombrants.get(i).idRattachement;
+            }
+
+            double[][] distPoints = new double[nbPoints][nbPoints];
+            for (int i = 0; i < nbPoints; i++) {
+                int source = points[i];
+                ResultatDuDijkstra res = dijkstraDepuis.get(source);
+                double[] dist = res.getDistanceDepuisSource();
+                for (int j = 0; j < nbPoints; j++) {
+                    distPoints[i][j] = dist[points[j]];
+                }
+            }
+
+            // Vérification d'accessibilité
+            for (int i = 1; i < nbPoints; i++) {
+                if (Double.isInfinite(distPoints[0][i]) || Double.isInfinite(distPoints[i][0])) {
+                    System.out.println("Le carrefour rattaché à un encombrant ("
+                            + graphe.getNomSommet(points[i])
+                            + ") n'est pas accessible depuis le dépôt ou retour impossible.");
+                    return;
+                }
+            }
+
+            // 5) TSP par DP (comme pour HO2)
+            int maxMask = 1 << k;
+            double[][] dp = new double[maxMask][k];
+            int[][] pred = new int[maxMask][k];
+
+            for (int mask = 0; mask < maxMask; mask++) {
+                for (int i = 0; i < k; i++) {
+                    dp[mask][i] = Double.POSITIVE_INFINITY;
+                    pred[mask][i] = -1;
+                }
+            }
+
+            // Départ : dépôt -> chaque encombrant i
+            for (int i = 0; i < k; i++) {
+                int mask = 1 << i;
+                dp[mask][i] = distPoints[0][i + 1];
+            }
+
+            // Transitions
+            for (int mask = 0; mask < maxMask; mask++) {
+                for (int last = 0; last < k; last++) {
+                    if ((mask & (1 << last)) == 0) continue;
+                    double coutActuel = dp[mask][last];
+                    if (Double.isInfinite(coutActuel)) continue;
+
+                    for (int nxt = 0; nxt < k; nxt++) {
+                        if ((mask & (1 << nxt)) != 0) continue;
+                        int nouveauMask = mask | (1 << nxt);
+                        double coutTransition = distPoints[last + 1][nxt + 1];
+                        double nouveauCout = coutActuel + coutTransition;
+                        if (nouveauCout < dp[nouveauMask][nxt]) {
+                            dp[nouveauMask][nxt] = nouveauCout;
+                            pred[nouveauMask][nxt] = last;
+                        }
+                    }
+                }
+            }
+
+            int fullMask = maxMask - 1;
+            double meilleurCout = Double.POSITIVE_INFINITY;
+            int dernierIdx = -1;
+
+            for (int last = 0; last < k; last++) {
+                double coutTour = dp[fullMask][last] + distPoints[last + 1][0];
+                if (coutTour < meilleurCout) {
+                    meilleurCout = coutTour;
+                    dernierIdx = last;
+                }
+            }
+
+            if (Double.isInfinite(meilleurCout) || dernierIdx == -1) {
+                System.out.println("Impossible de construire une tournée couvrant tous les encombrants (HO3).");
+                return;
+            }
+
+            // 6) Reconstruction de l'ordre des encombrants
+            List<Integer> ordreEncombrants = new ArrayList<>();
+            int mask = fullMask;
+            int current = dernierIdx;
+            while (current != -1) {
+                ordreEncombrants.add(current);
+                int prev = pred[mask][current];
+                mask = mask & ~(1 << current);
+                current = prev;
+            }
+            Collections.reverse(ordreEncombrants);
+
+            // 7) Reconstruction du chemin global (liste de sommets)
+            List<Integer> cheminGlobal = new ArrayList<>();
+            int sommetCourant = idDepot;
+            cheminGlobal.add(idDepot);
+
+            for (int idx : ordreEncombrants) {
+                EncombrantAvecInfos ei = encombrants.get(idx);
+                int cible = ei.idRattachement;
+
+                ResultatDuDijkstra res = dijkstraDepuis.get(sommetCourant);
+                List<Integer> segment = reconstruireChemin(
+                        res.getPredecesseur(), sommetCourant, cible);
+
+                if (!segment.isEmpty() && !cheminGlobal.isEmpty()) {
+                    segment.remove(0); // éviter de répéter le sommet de départ
+                }
+                cheminGlobal.addAll(segment);
+                sommetCourant = cible;
+            }
+
+            // Retour au dépôt
+            ResultatDuDijkstra resRetour = dijkstraDepuis.get(sommetCourant);
+            List<Integer> segmentRetour = reconstruireChemin(
+                    resRetour.getPredecesseur(), sommetCourant, idDepot);
+            if (!segmentRetour.isEmpty()) {
+                segmentRetour.remove(0);
+            }
+            cheminGlobal.addAll(segmentRetour);
+
+            // 8) Arcs réellement parcourus
+            Set<Long> arcsParcourus = new HashSet<>();
+            for (int i = 0; i + 1 < cheminGlobal.size(); i++) {
+                int u = cheminGlobal.get(i);
+                int v = cheminGlobal.get(i + 1);
+                arcsParcourus.add(encodageArc(u, v));
+            }
+
+            // 9) Boucles locales
+            double coutBouclesLocales = 0.0;
+
+            // Pour l'affichage : map sommet -> liste de "boucles" (chaînes décrivant le chemin)
+            Map<Integer, List<String>> bouclesParSommet = new HashMap<>();
+
+            for (EncombrantAvecInfos ei : encombrants) {
+                int idU = ei.idU;
+                int idV = ei.idV;
+
+                long keyUV = encodageArc(idU, idV);
+                long keyVU = encodageArc(idV, idU);
+
+                if (ei.estDoubleSensUneSeuleVoie) {
+                    // Cas HO1 : double sens une seule voie
+                    // Si on passe par U->V ou V->U, l'encombrant est ramassé
+                    if (arcsParcourus.contains(keyUV) || arcsParcourus.contains(keyVU)) {
+                        continue;
+                    }
+
+                    // Sinon, boucle locale sur la rue U-V depuis le sommet de rattachement
+                    int s = ei.idRattachement;
+                    double longueur = graphe.getLongueurArete(idU, idV);
+                    coutBouclesLocales += 2.0 * longueur; // U->V->U ou V->U->V
+
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("boucle locale sur la rue ")
+                            .append(graphe.getNomSommet(idU))
+                            .append("-")
+                            .append(graphe.getNomSommet(idV))
+                            .append(" : ");
+
+                    if (s == idU) {
+                        sb.append(graphe.getNomSommet(idU))
+                                .append(" -> ")
+                                .append(graphe.getNomSommet(idV))
+                                .append(" -> ")
+                                .append(graphe.getNomSommet(idU));
+                    } else {
+                        sb.append(graphe.getNomSommet(idV))
+                                .append(" -> ")
+                                .append(graphe.getNomSommet(idU))
+                                .append(" -> ")
+                                .append(graphe.getNomSommet(idV));
+                    }
+
+                    bouclesParSommet
+                            .computeIfAbsent(s, k2 -> new ArrayList<>())
+                            .add(sb.toString());
+
+                } else {
+                    // Cas HO2 : arc orienté U->V
+                    // Si on passe naturellement par U->V, pas de boucle
+                    if (arcsParcourus.contains(keyUV)) {
+                        continue;
+                    }
+
+                    // Sinon, boucle orientée : U->V (arc direct), puis V->U (chemin le plus court)
+                    ResultatDuDijkstra resDepuisV = dijkstraDepuis.get(idV);
+
+                    double longueurUV;
+                    try {
+                        longueurUV = graphe.obtenirLongueurArete(idU, idV);
+                    } catch (IllegalArgumentException ex) {
+                        System.out.println("Attention : aucun arc direct "
+                                + graphe.getNomSommet(idU) + "->" + graphe.getNomSommet(idV)
+                                + " alors qu'un encombrant y est déclaré.");
+                        continue;
+                    }
+
+                    double[] distDepuisV = resDepuisV.getDistanceDepuisSource();
+                    double dVU = distDepuisV[idU];
+                    if (Double.isInfinite(dVU)) {
+                        System.out.println("Attention : impossible de revenir de "
+                                + graphe.getNomSommet(idV) + " vers " + graphe.getNomSommet(idU)
+                                + " pour la boucle locale (HO3).");
+                        continue;
+                    }
+
+                    coutBouclesLocales += longueurUV + dVU;
+
+                    List<Integer> retour = reconstruireChemin(
+                            resDepuisV.getPredecesseur(), idV, idU);
+                    if (!retour.isEmpty()) {
+                        retour.remove(0); // éviter de répéter V
+                    }
+
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("boucle locale orientée pour ")
+                            .append(graphe.getNomSommet(idU))
+                            .append("->")
+                            .append(graphe.getNomSommet(idV))
+                            .append(" : ");
+
+                    sb.append(graphe.getNomSommet(idU))
+                            .append(" -> ")
+                            .append(graphe.getNomSommet(idV));
+
+                    for (int sRetour : retour) {
+                        sb.append(" -> ").append(graphe.getNomSommet(sRetour));
+                    }
+
+                    // Cette boucle part du sommet de rattachement (idRattachement == idU)
+                    int s = ei.idRattachement;
+                    bouclesParSommet
+                            .computeIfAbsent(s, k2 -> new ArrayList<>())
+                            .add(sb.toString());
+                }
+            }
+
+            double distanceTotale = meilleurCout + coutBouclesLocales;
+
+            // 10) Affichage
+
+            System.out.println("Ordre optimal (indices d'encombrants) : " + ordreEncombrants);
+            System.out.println("Chemin complet (avec dépôt au début et à la fin) :");
+            for (int id : cheminGlobal) {
+                String nom = graphe.getNomSommet(id);
+                System.out.print(nom);
+
+                List<String> boucles = bouclesParSommet.get(id);
+                if (boucles != null && !boucles.isEmpty()) {
+                    for (String b : boucles) {
+                        System.out.print(" [");
+                        System.out.print(b);
+                        System.out.print("]");
+                    }
+                    // on enlève pour ne pas réafficher plus loin
+                    bouclesParSommet.remove(id);
+                }
+
+                System.out.print(" -> ");
+            }
+            System.out.println("(fin)");
+
+            System.out.println("\nDistance minimale de la tournée (sans boucles locales) : "
+                    + meilleurCout + " m");
+            System.out.println("Surcoût dû aux boucles locales : "
+                    + coutBouclesLocales + " m");
+            System.out.println("Distance totale de la tournée (avec boucles locales) : "
+                    + distanceTotale + " m");
+            System.out.println("\n");
+
+        } catch (Exception e) {
+            System.err.println("Erreur dans ProgrammeHO3Tournee : " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
