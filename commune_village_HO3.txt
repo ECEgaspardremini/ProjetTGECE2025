@@ -1,0 +1,57 @@
+NODES 12
+A
+B
+C
+D
+E
+F
+G
+H
+I
+J
+K
+T
+
+DEPOT T
+
+# ARCS : voies orientées (simple sens ou double voies)
+ARCS 19
+T J 290
+J T 290
+
+J E 170
+E J 170
+
+E D 160
+D E 160
+
+D F 170
+F D 170
+
+F G 105
+G F 105
+
+G I 170
+I G 170
+
+H I 160
+I H 160
+
+H F 190
+
+C B 125
+B J 170
+A T 375
+K T 375
+
+# EDGES : rues double-sens une seule voie (ramassage des deux côtés en un passage)
+EDGES 6
+B D 150
+C D 215
+A C 150
+A B 175
+K A 115
+C H 300
+
+# Encombrant sur la rue simple A-B, à 80 m depuis A
+ENCOMBRANT A B 80
